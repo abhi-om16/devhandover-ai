@@ -1,78 +1,152 @@
 
 import streamlit as st
 import sqlite3
-import json
-import os
 import re
+import os
 from datetime import datetime
 
-# ============================================================
-# DEVHANDOVER AI - IMPROVEMENT 2
-# AI-POWERED KNOWLEDGE GAP DETECTION
-# ============================================================
+# ==========================================================
+# DEVHANDOVER AI
+# IMPROVEMENT 2: KNOWLEDGE GAP DETECTION
+# API-FREE RULE-BASED IMPLEMENTATION
+# ==========================================================
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "knowledge_gaps.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "knowledge_gaps.db")
 
-MODEL_NAME = "gemini-2.0-flash"
+
+# ==========================================================
+# 1. KNOWLEDGE AREAS AND EXPECTED INFORMATION
+# ==========================================================
 
 KNOWLEDGE_AREAS = {
-    "Architecture": (
-        "Explain the overall system architecture, major components, "
-        "their responsibilities, and how they communicate."
-    ),
-    "Database": (
-        "Explain the database structure, important tables, relationships, "
-        "data flow, migrations, and backup procedures."
-    ),
-    "APIs and Integrations": (
-        "Explain the important APIs, endpoints, integrations, authentication, "
-        "request formats, and error handling."
-    ),
-    "Deployment": (
-        "Explain how the application is deployed, configured, monitored, "
-        "updated, and rolled back."
-    ),
-    "Security": (
-        "Explain authentication, authorization, sensitive data handling, "
-        "security controls, and known security concerns."
-    ),
-    "Debugging and Troubleshooting": (
-        "Explain common failures, how to identify them, debugging steps, "
-        "logs, and recovery procedures."
-    ),
-    "Business Logic": (
-        "Explain the main workflows, important business rules, edge cases, "
-        "and decisions behind the implementation."
-    ),
-    "Dependencies": (
-        "Explain external libraries, services, dependencies, versions, "
-        "and what would happen if a dependency became unavailable."
-    ),
-    "Testing": (
-        "Explain the testing strategy, test cases, test environments, "
-        "known limitations, and how to run tests."
-    ),
-    "Other": (
-        "Explain important project knowledge that does not fit into "
-        "the other technical areas."
-    )
+    "Architecture": {
+        "description": "System architecture and component structure",
+        "checks": {
+            "components": ["component", "module", "service", "layer"],
+            "communication": ["communicate", "interaction", "connect", "flow"],
+            "structure": ["architecture", "structure", "design", "system"],
+            "dependencies": ["dependency", "dependencies", "dependent"],
+            "purpose": ["purpose", "responsibility", "function", "role"]
+        }
+    },
+
+    "Database": {
+        "description": "Database structure and data management",
+        "checks": {
+            "tables": ["table", "tables", "collection", "schema"],
+            "relationships": ["relationship", "foreign key", "primary key", "relation"],
+            "queries": ["query", "queries", "sql", "retrieval"],
+            "backup": ["backup", "restore", "recovery"],
+            "data_flow": ["data flow", "insert", "update", "storage"]
+        }
+    },
+
+    "APIs and Integrations": {
+        "description": "APIs and external integrations",
+        "checks": {
+            "endpoints": ["endpoint", "route", "url", "api"],
+            "requests": ["request", "response", "payload", "json"],
+            "authentication": ["authentication", "token", "authorization", "api key"],
+            "errors": ["error handling", "exception", "status code", "validation"],
+            "integration": ["integration", "third party", "external service"]
+        }
+    },
+
+    "Deployment": {
+        "description": "Application deployment and maintenance",
+        "checks": {
+            "platform": ["server", "cloud", "hosting", "platform"],
+            "process": ["deploy", "deployment", "release", "publish"],
+            "configuration": ["configuration", "config", "environment", "variable"],
+            "monitoring": ["monitor", "logs", "logging", "monitoring"],
+            "rollback": ["rollback", "revert", "previous version", "recovery"]
+        }
+    },
+
+    "Security": {
+        "description": "Security and access management",
+        "checks": {
+            "authentication": ["authentication", "login", "sign in", "password"],
+            "authorization": ["authorization", "permissions", "access control", "roles"],
+            "encryption": ["encryption", "encrypted", "hashing", "hash"],
+            "data_protection": ["sensitive data", "privacy", "data protection", "confidential"],
+            "validation": ["validation", "input validation", "sanitization"]
+        }
+    },
+
+    "Debugging and Troubleshooting": {
+        "description": "Debugging and problem resolution",
+        "checks": {
+            "errors": ["error", "exception", "failure", "bug"],
+            "logs": ["logs", "logging", "console", "traceback"],
+            "diagnosis": ["debug", "diagnose", "identify", "investigate"],
+            "solution": ["solution", "fix", "resolve", "correct"],
+            "prevention": ["prevent", "prevention", "monitor", "testing"]
+        }
+    },
+
+    "Business Logic": {
+        "description": "Core application workflows and business rules",
+        "checks": {
+            "workflow": ["workflow", "process", "steps", "flow"],
+            "rules": ["rule", "rules", "condition", "logic"],
+            "input_output": ["input", "output", "result", "response"],
+            "edge_cases": ["edge case", "exception", "special case", "invalid"],
+            "decisions": ["decision", "reason", "because", "approach"]
+        }
+    },
+
+    "Dependencies": {
+        "description": "Libraries, packages and external dependencies",
+        "checks": {
+            "libraries": ["library", "libraries", "package", "packages"],
+            "versions": ["version", "versions", "upgrade", "compatibility"],
+            "installation": ["install", "installation", "requirements", "setup"],
+            "external": ["external", "third party", "service", "integration"],
+            "failure": ["failure", "unavailable", "fallback", "alternative"]
+        }
+    },
+
+    "Testing": {
+        "description": "Testing strategy and quality assurance",
+        "checks": {
+            "test_cases": ["test case", "test cases", "scenario", "cases"],
+            "unit_testing": ["unit test", "unit testing", "function testing"],
+            "integration": ["integration test", "integration testing"],
+            "validation": ["validation", "expected result", "actual result"],
+            "limitations": ["limitation", "limitations", "known issue", "coverage"]
+        }
+    },
+
+    "Other": {
+        "description": "Other important project knowledge",
+        "checks": {
+            "purpose": ["purpose", "objective", "goal"],
+            "process": ["process", "workflow", "procedure"],
+            "implementation": ["implementation", "implemented", "developed"],
+            "problems": ["problem", "challenge", "issue"],
+            "solution": ["solution", "resolved", "improvement"]
+        }
+    }
 }
 
-# ============================================================
-# DATABASE
-# ============================================================
+
+# ==========================================================
+# 2. DATABASE FUNCTIONS
+# ==========================================================
 
 def get_connection():
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    return connection
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def initialize_database():
-    connection = get_connection()
 
-    connection.execute("""
+    conn = get_connection()
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS knowledge_gaps (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_name TEXT NOT NULL,
@@ -80,23 +154,25 @@ def initialize_database():
             knowledge_area TEXT NOT NULL,
             question TEXT NOT NULL,
             answer TEXT NOT NULL,
-            completeness INTEGER DEFAULT 0,
-            severity TEXT DEFAULT 'Medium',
+            completeness INTEGER NOT NULL,
+            severity TEXT NOT NULL,
             gap_summary TEXT,
+            missing_information TEXT,
             follow_up TEXT,
             status TEXT DEFAULT 'Open',
             created_at TEXT NOT NULL
         )
     """)
 
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 
 def save_analysis(project, contributor, domain, question, answer, result):
-    connection = get_connection()
 
-    connection.execute("""
+    conn = get_connection()
+
+    conn.execute("""
         INSERT INTO knowledge_gaps (
             project_name,
             contributor,
@@ -106,11 +182,12 @@ def save_analysis(project, contributor, domain, question, answer, result):
             completeness,
             severity,
             gap_summary,
+            missing_information,
             follow_up,
             status,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         project,
         contributor,
@@ -120,396 +197,375 @@ def save_analysis(project, contributor, domain, question, answer, result):
         result["completeness"],
         result["severity"],
         result["gap_summary"],
+        "\n".join(result["missing_information"]),
         result["follow_up"],
-        "Open" if result["severity"] != "Low" else "Under Review",
+        "Open",
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
 
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 
 def get_all_gaps(project=None):
-    connection = get_connection()
+
+    conn = get_connection()
 
     if project:
-        rows = connection.execute("""
+        records = conn.execute("""
             SELECT * FROM knowledge_gaps
             WHERE project_name = ?
             ORDER BY created_at DESC
         """, (project,)).fetchall()
+
     else:
-        rows = connection.execute("""
+        records = conn.execute("""
             SELECT * FROM knowledge_gaps
             ORDER BY created_at DESC
         """).fetchall()
 
-    connection.close()
-    return [dict(row) for row in rows]
+    conn.close()
+
+    return [dict(record) for record in records]
 
 
 def update_gap_status(gap_id, status):
-    connection = get_connection()
 
-    connection.execute("""
+    conn = get_connection()
+
+    conn.execute("""
         UPDATE knowledge_gaps
         SET status = ?
         WHERE id = ?
     """, (status, gap_id))
 
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 
-# ============================================================
-# GEMINI CONFIGURATION
-# ============================================================
+# ==========================================================
+# 3. TEXT PROCESSING
+# ==========================================================
 
-def get_gemini_api_key():
-    api_key = os.getenv("GEMINI_API_KEY")
+def normalize_text(text):
 
-    if not api_key:
-        try:
-            api_key = st.secrets.get("GEMINI_API_KEY")
-        except Exception:
-            pass
+    text = text.lower()
 
-    return api_key
+    text = re.sub(r"[^a-z0-9\s_-]", " ", text)
+
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
 
 
-def call_gemini(prompt):
-    """
-    Supports both the newer google-genai SDK and
-    the older google-generativeai SDK.
-    """
+def contains_keyword(text, keyword):
 
-    api_key = get_gemini_api_key()
+    text = normalize_text(text)
+    keyword = normalize_text(keyword)
 
-    if not api_key:
-        raise ValueError(
-            "GEMINI_API_KEY is missing. Configure your Gemini API key."
+    pattern = r"(?<![a-z0-9])" + re.escape(keyword) + r"(?![a-z0-9])"
+
+    return bool(re.search(pattern, text))
+
+
+# ==========================================================
+# 4. FOLLOW-UP QUESTION GENERATION
+# ==========================================================
+
+FOLLOW_UP_TEMPLATES = {
+    "components": "Can you explain the main components and their individual responsibilities?",
+    "communication": "How do these components communicate with each other?",
+    "structure": "Can you explain the overall structure and design of this system?",
+    "dependencies": "What are the important dependencies, and how do they affect this area?",
+    "purpose": "Why was this approach selected, and what purpose does it serve?",
+
+    "tables": "Can you describe the important database tables or collections?",
+    "relationships": "How are the database tables related to each other?",
+    "queries": "What important queries are used to retrieve or modify the data?",
+    "backup": "How is the database backed up and restored?",
+    "data_flow": "How does data move through the application and reach the database?",
+
+    "endpoints": "What are the important API endpoints and what does each endpoint do?",
+    "requests": "What request and response formats are used?",
+    "authentication": "How are API requests authenticated and authorized?",
+    "errors": "How are API errors and invalid requests handled?",
+    "integration": "Which external services are integrated and how do they work?",
+
+    "platform": "Where is the application hosted and what infrastructure does it require?",
+    "process": "Can you explain the deployment process step by step?",
+    "configuration": "Which environment variables and configuration settings are required?",
+    "monitoring": "How do you monitor the application and inspect its logs?",
+    "rollback": "How can you roll back to a previous working version?",
+
+    "encryption": "How is sensitive information protected?",
+    "authorization": "How are user roles and permissions managed?",
+    "data_protection": "How is confidential project data protected?",
+    "validation": "How does the system validate user input?",
+
+    "errors": "What are the common errors and how do you identify them?",
+    "logs": "Where can someone find the logs needed for debugging?",
+    "diagnosis": "What steps should a successor follow to diagnose a problem?",
+    "solution": "Can you describe how a common issue was fixed?",
+    "prevention": "What measures help prevent the same issue from happening again?",
+
+    "workflow": "Can you explain the complete workflow step by step?",
+    "rules": "What important business rules and conditions does the system follow?",
+    "input_output": "What inputs does this process accept and what outputs does it produce?",
+    "edge_cases": "What happens when the system receives invalid or unexpected input?",
+    "decisions": "Why were these implementation decisions made?",
+
+    "libraries": "Which important libraries and packages does the project use?",
+    "versions": "Are there specific package versions or compatibility requirements?",
+    "installation": "How can a new developer install and configure the dependencies?",
+    "external": "Which external services does the project depend on?",
+    "failure": "What happens if an external dependency becomes unavailable?",
+
+    "test_cases": "What are the most important test cases for this area?",
+    "unit_testing": "Which individual functions or modules have unit tests?",
+    "integration": "How do you test interactions between different components?",
+    "validation": "How do you verify that the actual result matches the expected result?",
+    "limitations": "What testing limitations or known issues should the successor know about?",
+
+    "implementation": "Can you explain how this functionality was implemented?",
+    "problems": "What major problems or challenges were encountered?",
+    "solution": "How were those challenges resolved?"
+}
+
+
+# ==========================================================
+# 5. KNOWLEDGE GAP DETECTION ENGINE
+# ==========================================================
+
+def analyze_answer(domain, answer):
+
+    answer = normalize_text(answer)
+
+    config = KNOWLEDGE_AREAS[domain]
+
+    checks = config["checks"]
+
+    word_count = len(answer.split())
+
+    matched = []
+    missing = []
+
+    # Check each expected knowledge topic.
+
+    for check_name, keywords in checks.items():
+
+        found = any(
+            contains_keyword(answer, keyword)
+            for keyword in keywords
         )
 
-    # New Google Gen AI SDK
-    try:
-        from google import genai
+        if found:
+            matched.append(check_name)
+        else:
+            missing.append(check_name)
 
-        client = genai.Client(api_key=api_key)
+    total_checks = len(checks)
 
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt
-        )
+    coverage = (len(matched) / total_checks) * 100
 
-        return response.text
+    # Answer detail score.
 
-    except ImportError:
-        pass
+    if word_count >= 60:
+        detail_score = 100
 
-    # Older Google Generative AI SDK
-    try:
-        import google.generativeai as genai
+    elif word_count >= 35:
+        detail_score = 80
 
-        genai.configure(api_key=api_key)
+    elif word_count >= 20:
+        detail_score = 60
 
-        model = genai.GenerativeModel("gemini-1.5-flash")
+    elif word_count >= 10:
+        detail_score = 35
 
-        response = model.generate_content(prompt)
+    else:
+        detail_score = 10
 
-        return response.text
+    # Overall completeness score.
 
-    except ImportError:
-        raise ImportError(
-            "Install either google-genai or google-generativeai."
-        )
-
-
-# ============================================================
-# RESPONSE PARSING
-# ============================================================
-
-def extract_json(response):
-    """
-    Extract JSON even if Gemini wraps the response
-    in Markdown code fences.
-    """
-
-    response = response.strip()
-
-    response = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        response,
-        flags=re.IGNORECASE
+    completeness = round(
+        (coverage * 0.75) + (detail_score * 0.25)
     )
 
-    response = re.sub(r"\s*```$", "", response)
+    # Identify severity.
 
-    start = response.find("{")
-    end = response.rfind("}")
-
-    if start == -1 or end == -1:
-        raise ValueError("Gemini did not return valid JSON.")
-
-    return json.loads(response[start:end + 1])
-
-
-def normalize_result(data):
-    severity = str(data.get("severity", "Medium")).title()
-
-    if severity not in ["High", "Medium", "Low"]:
-        severity = "Medium"
-
-    try:
-        completeness = int(data.get("completeness", 50))
-    except (ValueError, TypeError):
-        completeness = 50
-
-    completeness = max(0, min(100, completeness))
-
-    return {
-        "completeness": completeness,
-        "severity": severity,
-        "gap_summary": str(
-            data.get("gap_summary", "Further verification is required.")
-        ),
-        "missing_information": data.get(
-            "missing_information", []
-        ),
-        "follow_up": str(
-            data.get(
-                "follow_up",
-                "Can you explain this area in more detail?"
-            )
-        ),
-        "reason": str(
-            data.get("reason", "Additional information may be needed.")
-        ),
-        "status": str(data.get("status", "Needs review"))
-    }
-
-
-# ============================================================
-# FALLBACK EVALUATION
-# Used when Gemini is unavailable.
-# This is rule-based, NOT AI evaluation.
-# ============================================================
-
-def fallback_evaluation(answer, domain):
-    words = answer.split()
-    word_count = len(words)
-
-    if word_count < 10:
-        completeness = 15
+    if completeness < 40:
         severity = "High"
-        gap_summary = (
-            "The answer is too short to establish sufficient "
-            "project knowledge."
-        )
-        missing = [
-            "Detailed explanation",
-            "Practical examples",
-            "Dependencies or related components"
-        ]
-        follow_up = (
-            f"Can you explain the {domain} area step by step "
-            "and provide a practical example?"
+
+    elif completeness < 70:
+        severity = "Medium"
+
+    else:
+        severity = "Low"
+
+    # Generate missing information list.
+
+    missing_information = []
+
+    for item in missing:
+
+        if item in FOLLOW_UP_TEMPLATES:
+            missing_information.append(
+                FOLLOW_UP_TEMPLATES[item]
+            )
+
+    # Create targeted follow-up.
+
+    if missing:
+
+        follow_up = FOLLOW_UP_TEMPLATES.get(
+            missing[0],
+            "Can you provide more details about this topic?"
         )
 
-    elif word_count < 35:
-        completeness = 45
-        severity = "Medium"
-        gap_summary = (
-            "The answer contains some information, but more detail "
-            "is required before the knowledge can be transferred."
-        )
-        missing = [
-            "Implementation details",
-            "Potential problems",
-            "Practical workflow"
-        ]
+    elif completeness < 80:
+
         follow_up = (
-            f"What are the important implementation details, "
-            f"dependencies, and common issues related to {domain}?"
+            "Can you provide a practical example and explain "
+            "how a new team member would perform this task?"
         )
 
     else:
-        completeness = 70
-        severity = "Low"
-        gap_summary = (
-            "The answer contains useful information. "
-            "It should still be verified against project evidence."
-        )
-        missing = [
-            "Verify the explanation against project documentation",
-            "Confirm that another team member can follow the process"
-        ]
+
         follow_up = (
-            f"Can you describe a real example or situation involving "
-            f"{domain} and explain how it was handled?"
+            "Can you describe a real project scenario involving "
+            "this area and explain how it was handled?"
         )
 
-    return {
-        "completeness": completeness,
-        "severity": severity,
-        "gap_summary": gap_summary,
-        "missing_information": missing,
-        "follow_up": follow_up,
-        "reason": "Rule-based fallback evaluation based on answer length.",
-        "status": "Needs review"
-    }
-
-
-# ============================================================
-# AI KNOWLEDGE GAP ANALYSIS
-# ============================================================
-
-def analyze_answer(project, domain, question, answer):
-
-    prompt = f"""
-You are an AI-powered project knowledge transfer analyst.
-
-Your task is to evaluate an outgoing employee's answer
-during a technical handover interview.
-
-PROJECT: {project}
-
-KNOWLEDGE AREA: {domain}
-
-KNOWLEDGE EXPECTED:
-{KNOWLEDGE_AREAS[domain]}
-
-INTERVIEW QUESTION:
-{question}
-
-EMPLOYEE ANSWER:
-{answer}
-
-Evaluate the answer using these rules:
-
-1. Identify missing, incomplete, unclear or undocumented knowledge.
-2. Check whether the answer explains the topic sufficiently.
-3. Identify information that a successor would need to maintain the project.
-4. Generate ONE specific follow-up question based on the actual answer.
-5. Do not generate generic questions.
-6. Do not assume information that is not present in the answer.
-7. Assign severity:
-   High: Critical knowledge is missing or the answer is unusable.
-   Medium: Some important information is missing or unclear.
-   Low: The answer is mostly complete but needs verification.
-8. Give a completeness score between 0 and 100.
-9. Treat an answer as needing evidence verification even if it sounds complete.
-
-Return ONLY valid JSON in this exact structure:
-
-{{
-    "completeness": 65,
-    "severity": "Medium",
-    "gap_summary": "Explanation of the identified knowledge gap",
-    "missing_information": [
-        "Missing information 1",
-        "Missing information 2"
-    ],
-    "follow_up": "One specific follow-up question",
-    "reason": "Why this severity was assigned",
-    "status": "Needs review"
-}}
-"""
-
-    try:
-        response = call_gemini(prompt)
-        data = extract_json(response)
-        result = normalize_result(data)
-        result["evaluation_mode"] = "Gemini AI"
-        return result
-
-    except Exception as error:
-        result = fallback_evaluation(answer, domain)
-        result["evaluation_mode"] = "Rule-based fallback"
-        result["error"] = str(error)
-        return result
-
-
-# ============================================================
-# INITIAL INTERVIEW QUESTIONS
-# ============================================================
-
-def get_initial_question(domain):
-    return KNOWLEDGE_AREAS[domain]
-
-
-# ============================================================
-# DISPLAY HELPERS
-# ============================================================
-
-def display_severity(severity):
+    # Generate gap summary.
 
     if severity == "High":
-        st.error("HIGH PRIORITY GAP")
+
+        gap_summary = (
+            f"Critical knowledge gaps were detected in {domain}. "
+            f"Only {len(matched)} of {total_checks} expected knowledge "
+            "topics were identified. More information is required "
+            "before a successor can confidently take ownership."
+        )
 
     elif severity == "Medium":
-        st.warning("MEDIUM PRIORITY GAP")
+
+        gap_summary = (
+            f"Some knowledge about {domain} is documented, but "
+            "important details are still missing. A follow-up "
+            "interview is recommended."
+        )
 
     else:
-        st.success("LOW PRIORITY GAP")
 
+        gap_summary = (
+            f"The answer covers most expected topics in {domain}. "
+            "The information should still be verified against "
+            "project documentation or practical evidence."
+        )
+
+    return {
+        "completeness": completeness,
+        "severity": severity,
+        "matched_topics": matched,
+        "missing_topics": missing,
+        "missing_information": missing_information,
+        "gap_summary": gap_summary,
+        "follow_up": follow_up,
+        "word_count": word_count,
+        "coverage": round(coverage)
+    }
+
+
+# ==========================================================
+# 6. INITIAL INTERVIEW QUESTION
+# ==========================================================
+
+def get_initial_question(domain):
+
+    return (
+        f"You are explaining the {domain} area of the project "
+        "to a new team member. "
+        f"{KNOWLEDGE_AREAS[domain]['description']}. "
+        "Explain how it works, its important components, "
+        "and what a successor needs to know."
+    )
+
+
+# ==========================================================
+# 7. DISPLAY ANALYSIS
+# ==========================================================
 
 def display_analysis(result):
 
     st.subheader("Knowledge Analysis")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
-    with col1:
-        st.metric(
-            "Knowledge Completeness",
-            f'{result["completeness"]}%'
-        )
+    col1.metric(
+        "Completeness",
+        f'{result["completeness"]}%'
+    )
 
-    with col2:
-        st.metric(
-            "Gap Severity",
-            result["severity"]
-        )
+    col2.metric(
+        "Severity",
+        result["severity"]
+    )
+
+    col3.metric(
+        "Topic Coverage",
+        f'{result["coverage"]}%'
+    )
 
     st.progress(result["completeness"] / 100)
 
-    display_severity(result["severity"])
+    if result["severity"] == "High":
 
-    st.markdown("**Identified Gap**")
+        st.error("HIGH PRIORITY: Critical knowledge gaps detected.")
+
+    elif result["severity"] == "Medium":
+
+        st.warning("MEDIUM PRIORITY: Additional information required.")
+
+    else:
+
+        st.success("LOW PRIORITY: Most expected topics were covered.")
+
+    st.markdown("### Gap Summary")
     st.write(result["gap_summary"])
 
-    st.markdown("**Missing or Unverified Information**")
+    st.markdown("### Topics Identified")
 
-    missing = result.get("missing_information", [])
+    if result["matched_topics"]:
 
-    if missing:
-        for item in missing:
-            st.markdown(f"- {item}")
+        for topic in result["matched_topics"]:
+            st.markdown(f"- {topic.replace('_', ' ').title()}")
+
     else:
-        st.write("No specific missing information was identified.")
+        st.write("No expected topics were identified.")
 
-    st.markdown("**Why was this priority assigned?**")
-    st.write(result["reason"])
+    st.markdown("### Missing Knowledge")
 
-    st.markdown("**Recommended Follow-up Question**")
+    if result["missing_information"]:
+
+        for item in result["missing_information"]:
+            st.markdown(f"- {item}")
+
+    else:
+
+        st.success("All configured knowledge checks were matched.")
+
+    st.markdown("### Recommended Follow-up Question")
 
     st.info(result["follow_up"])
 
     st.caption(
-        f'Evaluation method: {result["evaluation_mode"]}'
+        f'Answer length: {result["word_count"]} words | '
+        "Evaluation method: Rule-based analysis"
     )
 
-    if result.get("error"):
-        st.warning(
-            "Gemini was unavailable. This result uses rule-based "
-            "evaluation and should not be presented as an AI assessment."
-        )
 
-
-# ============================================================
-# GAP DASHBOARD
-# ============================================================
+# ==========================================================
+# 8. KNOWLEDGE GAP DASHBOARD
+# ==========================================================
 
 def render_gap_dashboard(project):
 
@@ -518,68 +574,100 @@ def render_gap_dashboard(project):
     records = get_all_gaps(project)
 
     if not records:
-        st.info("No interview records found for this project yet.")
+
+        st.info("No interview records available for this project.")
         return
 
     total = len(records)
 
-    high = sum(1 for r in records if r["severity"] == "High")
-    medium = sum(1 for r in records if r["severity"] == "Medium")
-    low = sum(1 for r in records if r["severity"] == "Low")
+    high = sum(
+        1 for record in records
+        if record["severity"] == "High"
+    )
+
+    medium = sum(
+        1 for record in records
+        if record["severity"] == "Medium"
+    )
+
+    low = sum(
+        1 for record in records
+        if record["severity"] == "Low"
+    )
+
+    open_gaps = sum(
+        1 for record in records
+        if record["status"] == "Open"
+    )
 
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("Total Assessments", total)
     col2.metric("High Priority", high)
     col3.metric("Medium Priority", medium)
-    col4.metric("Low Priority", low)
+    col4.metric("Open Gaps", open_gaps)
 
     st.divider()
 
-    st.markdown("### Identified Knowledge Gaps")
+    st.markdown("### Interview Records")
 
     for record in records:
 
-        title = (
+        heading = (
             f'{record["knowledge_area"]} | '
             f'{record["severity"]} Priority | '
-            f'{record["created_at"]}'
+            f'ID: {record["id"]}'
         )
 
-        with st.expander(title):
+        with st.expander(heading):
 
             st.write("**Contributor:**", record["contributor"])
-            st.write("**Interview Question:**", record["question"])
-            st.write("**Answer:**", record["answer"])
+
+            st.write("**Interview Question:**")
+            st.write(record["question"])
+
+            st.write("**Contributor's Answer:**")
+            st.write(record["answer"])
 
             st.write(
                 "**Completeness:**",
                 f'{record["completeness"]}%'
             )
 
-            st.write("**Gap:**", record["gap_summary"])
+            st.write("**Identified Gap:**")
+            st.write(record["gap_summary"])
 
-            st.write("**Suggested Follow-up:**", record["follow_up"])
+            st.write("**Missing Information:**")
 
-            st.write("**Current Status:**", record["status"])
+            for item in record["missing_information"].split("\n"):
 
-            if record["status"] != "Resolved":
+                if item.strip():
+                    st.markdown(f"- {item}")
+
+            st.write("**Suggested Follow-up:**")
+            st.info(record["follow_up"])
+
+            st.write("**Status:**", record["status"])
+
+            if record["status"] == "Open":
 
                 if st.button(
                     "Mark as Resolved",
                     key=f'resolve_{record["id"]}'
                 ):
+
                     update_gap_status(record["id"], "Resolved")
+
                     st.rerun()
 
             else:
-                st.success("This gap has been marked as resolved.")
+
+                st.success("This gap has been resolved.")
 
 
-# ============================================================
-# MAIN STREAMLIT FEATURE
-# Import and call this function from app.py
-# ============================================================
+# ==========================================================
+# 9. MAIN IMPROVEMENT 2 INTERFACE
+# ==========================================================
 
 def render_knowledge_gap_detection():
 
@@ -588,13 +676,18 @@ def render_knowledge_gap_detection():
     st.title("AI-Powered Knowledge Gap Detection")
 
     st.write(
-        "Conduct structured knowledge interviews, identify missing "
-        "project information, and generate targeted follow-up questions."
+        "Identify missing project knowledge, evaluate interview "
+        "answers, and generate targeted follow-up questions."
+    )
+
+    st.caption(
+        "This version uses transparent rule-based analysis. "
+        "It does not require an external AI API."
     )
 
     st.divider()
 
-    # Project information
+    # Interview details
 
     st.subheader("Interview Details")
 
@@ -609,93 +702,106 @@ def render_knowledge_gap_detection():
     )
 
     domain = st.selectbox(
-        "Knowledge Area",
+        "Select Knowledge Area",
         list(KNOWLEDGE_AREAS.keys())
     )
 
+    st.caption(KNOWLEDGE_AREAS[domain]["description"])
+
     st.divider()
 
-    # Interview section
+    # Interview question
 
     st.subheader("Knowledge Interview")
 
     question = get_initial_question(domain)
 
     st.markdown("**Interview Question**")
+
     st.info(question)
 
     answer = st.text_area(
         "Contributor's Answer",
         height=180,
-        placeholder="Enter the contributor's explanation here..."
+        placeholder=(
+            "Enter the contributor's explanation here..."
+        )
     )
 
-    analyze_button = st.button(
+    if st.button(
         "Analyze Answer & Detect Gaps",
         type="primary",
         use_container_width=True
-    )
-
-    if analyze_button:
+    ):
 
         if not project.strip():
+
             st.error("Please enter a project name.")
 
         elif not contributor.strip():
+
             st.error("Please enter the contributor's name.")
 
-        elif not answer.strip():
-            st.error("Please enter an interview answer.")
+        elif len(answer.strip()) < 5:
+
+            st.error("Please enter a meaningful interview answer.")
 
         else:
 
-            with st.spinner(
-                "Analyzing the answer and identifying knowledge gaps..."
-            ):
+            with st.spinner("Analyzing project knowledge..."):
 
-                result = analyze_answer(
-                    project,
-                    domain,
-                    question,
-                    answer
-                )
+                result = analyze_answer(domain, answer)
 
                 save_analysis(
-                    project,
-                    contributor,
+                    project.strip(),
+                    contributor.strip(),
                     domain,
                     question,
-                    answer,
+                    answer.strip(),
                     result
                 )
 
-                st.session_state["improvement2_last_result"] = result
+                st.session_state["improvement2_result"] = result
 
-    # Latest analysis
+                st.session_state["improvement2_project"] = project.strip()
 
-    if "improvement2_last_result" in st.session_state:
+    # Display latest result
+
+    if "improvement2_result" in st.session_state:
 
         st.divider()
 
         display_analysis(
-            st.session_state["improvement2_last_result"]
+            st.session_state["improvement2_result"]
         )
 
-    # Project dashboard
+    # Display dashboard
 
     st.divider()
 
+    st.subheader("Saved Knowledge Gap Records")
+
     if project.strip():
+
         render_gap_dashboard(project.strip())
+
     else:
+
         st.caption(
-            "Enter a project name above to view its saved knowledge gaps."
+            "Enter a project name to view its saved interview records."
         )
 
 
-# ============================================================
-# OPTIONAL: RUN THIS FILE DIRECTLY FOR TESTING
-# ============================================================
+# ==========================================================
+# 10. RUN STANDALONE OR IMPORT INTO MAIN APP
+# ==========================================================
 
 if __name__ == "__main__":
+
+    st.set_page_config(
+        page_title="DevHandover AI - Knowledge Gap Detection",
+        page_icon="🧠",
+        layout="wide"
+    )
+
     render_knowledge_gap_detection()
